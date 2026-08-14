@@ -17,21 +17,27 @@ export default function ControlRoom() {
   const [waitlist, setWaitlist] = useState([]);
   const [inquiries, setInquiries] = useState([]);
   const [runs, setRuns] = useState([]);
+  const [integrations, setIntegrations] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [error, setError] = useState('');
 
   async function refresh() {
     setError('');
-    const [{ data: summaryData, error: summaryError }, { data: waitData }, { data: inquiryData }, { data: runData }] = await Promise.all([
+    const [summaryRes, waitRes, inquiryRes, runRes, integrationRes, taskRes] = await Promise.all([
       supabase.rpc('tecito_dashboard_summary'),
       supabase.rpc('tecito_admin_waitlist', { p_limit: 50 }),
       supabase.rpc('tecito_admin_inquiries', { p_limit: 50 }),
-      supabase.rpc('tecito_admin_agent_runs', { p_limit: 30 })
+      supabase.rpc('tecito_admin_agent_runs', { p_limit: 30 }),
+      supabase.rpc('tecito_admin_integrations'),
+      supabase.rpc('tecito_admin_tasks')
     ]);
-    if (summaryError) setError('Tu sesión existe, pero no tiene acceso a Tecito.');
-    setSummary(summaryData || null);
-    setWaitlist(waitData || []);
-    setInquiries(inquiryData || []);
-    setRuns(runData || []);
+    if (summaryRes.error) setError('Tu sesión existe, pero no tiene acceso a Tecito.');
+    setSummary(summaryRes.data || null);
+    setWaitlist(waitRes.data || []);
+    setInquiries(inquiryRes.data || []);
+    setRuns(runRes.data || []);
+    setIntegrations(integrationRes.data || []);
+    setTasks(taskRes.data || []);
   }
 
   useEffect(() => {
@@ -60,6 +66,11 @@ export default function ControlRoom() {
     await refresh();
   }
 
+  async function updateTask(id, status) {
+    await supabase.rpc('tecito_update_task_status', { p_id: id, p_status: status });
+    await refresh();
+  }
+
   if (loading) return <main className="control-shell"><div className="control-loading">Abriendo la Casa…</div></main>;
 
   return (
@@ -70,7 +81,7 @@ export default function ControlRoom() {
       </header>
 
       <section className="control-hero">
-        <div><p className="kicker">Negocio · privado</p><h1>La Casa, en una sola vista.</h1><p>Leads, ediciones, agentes y operaciones sin entrar a la base de datos.</p></div>
+        <div><p className="kicker">Negocio · privado</p><h1>La Casa, en una sola vista.</h1><p>Leads, ediciones, agentes, integraciones y trabajo operativo sin entrar a la base de datos.</p></div>
         <button className="control-refresh" onClick={refresh}>Actualizar</button>
       </section>
 
@@ -104,16 +115,36 @@ export default function ControlRoom() {
         </article>
       </section>
 
+      <section className="control-grid">
+        <article className="control-panel">
+          <div className="control-panel-head"><div><p className="kicker">Trabajo</p><h2>Cola operativa</h2></div><span>{tasks.filter((task) => task.status !== 'done').length} abiertos</span></div>
+          <div className="control-list">
+            {tasks.map((task) => <div className="control-row task-row" key={task.id}>
+              <div><strong>P{task.priority} · {task.title}</strong><small>{task.area} · {task.assignee_type}{task.assignee ? ` · ${task.assignee}` : ''}</small>{task.notes && <p>{task.notes}</p>}</div>
+              <select value={task.status} onChange={(e) => updateTask(task.id, e.target.value)}><option value="todo">todo</option><option value="in_progress">in progress</option><option value="blocked">blocked</option><option value="done">done</option></select>
+            </div>)}
+          </div>
+        </article>
+
+        <article className="control-panel">
+          <div className="control-panel-head"><div><p className="kicker">Sistema</p><h2>Integraciones</h2></div><span>{integrations.filter((item) => item.status === 'connected').length}/{integrations.length}</span></div>
+          <div className="control-list compact">
+            {integrations.map((item) => <div className="control-row integration-row" key={item.id}><div><strong>{item.name}</strong><small>{item.category}</small>{item.note && <p>{item.note}</p>}</div><span className={`integration-status ${item.status}`}>{item.status.replace('_',' ')}</span></div>)}
+          </div>
+        </article>
+      </section>
+
       <section className="control-panel control-agent-panel">
         <div className="control-panel-head"><div><p className="kicker">Agentes</p><h2>Actividad</h2></div><span>{runs.length}</span></div>
         <div className="control-list compact">
-          {runs.length === 0 && <p className="control-empty">No hay ejecuciones registradas todavía. Los agentes autorizados pueden usar el RPC <code>tecito_agent_log_run</code>.</p>}
+          {runs.length === 0 && <p className="control-empty">No hay ejecuciones registradas todavía. Los agentes autorizados pueden usar el endpoint <code>/api/agent/log</code>.</p>}
           {runs.map((run) => <div className="control-row" key={run.id}><div><strong>{run.agent_name}</strong><small>{run.action}</small>{run.summary && <p>{run.summary}</p>}</div><span className={`run-status ${run.status}`}>{run.status}</span></div>)}
         </div>
       </section>
 
       <section className="control-links">
         <a href="/">Ver sitio público ↗</a>
+        <a href="https://github.com/executiveusa/tecitodelaverdad" target="_blank" rel="noreferrer">GitHub ↗</a>
         <a href="https://supabase.com/dashboard/project/cyxdevcjycmffhmwxojh" target="_blank" rel="noreferrer">Supabase ↗</a>
         <a href="https://vercel.com/pauli-4426s-projects/tecitodelaverdad" target="_blank" rel="noreferrer">Vercel ↗</a>
       </section>
