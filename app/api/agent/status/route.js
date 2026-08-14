@@ -10,7 +10,18 @@ export async function GET(request) {
   const { data: userData, error: userError } = await supabase.auth.getUser(auth.slice(7));
   if (userError || !userData?.user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabase.rpc('tecito_dashboard_summary');
-  if (error) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-  return NextResponse.json({ ok: true, actor: userData.user.email, summary: data });
+  const [summaryRes, taskRes, integrationRes] = await Promise.all([
+    supabase.rpc('tecito_dashboard_summary'),
+    supabase.rpc('tecito_admin_tasks'),
+    supabase.rpc('tecito_admin_integrations')
+  ]);
+  if (summaryRes.error || taskRes.error || integrationRes.error) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+
+  return NextResponse.json({
+    ok: true,
+    actor: userData.user.email,
+    summary: summaryRes.data,
+    tasks: taskRes.data,
+    integrations: integrationRes.data
+  });
 }
