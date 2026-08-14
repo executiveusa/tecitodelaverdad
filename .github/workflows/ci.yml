@@ -2,12 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/canonical-build]
+    branches: [main]
   pull_request:
     branches: [main]
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,4 +15,5 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - run: npm test
       - run: npm run build
